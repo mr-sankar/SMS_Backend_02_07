@@ -1,0 +1,11 @@
+{
+  "compilerOptions": {
+    "baseUrl": ".",
+    "ignoreDeprecations": "6.0",
+    "paths": {
+      "@workspace/db": ["./src/db/index.js"],
+      "@workspace/api-zod": ["./src/api-zod/index.js"]
+    }
+  },
+  "include": ["src/**/*"]
+}

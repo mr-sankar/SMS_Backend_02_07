@@ -1,0 +1,169 @@
+Connecting to PostgreSQL database via DATABASE_URL...
+[11:01:52.978] [32mINFO[39m (11712): [36mDemo users verified[39m
+[11:01:53.662] [32mINFO[39m (11712): [36mStaff and classes seeded[39m
+[11:01:53.889] [32mINFO[39m (11712): [36mStaff IDs backfilled[39m
+[11:01:54.564] [32mINFO[39m (11712): [36mStudent links verified[39m
+[11:01:55.014] [32mINFO[39m (11712): [36mHostel seed data verified[39m
+[11:01:55.914] [32mINFO[39m (11712): [36mDemo notification data verified[39m
+[11:01:55.919] [32mINFO[39m (11712): [36mServer listening[39m
+    [35mport[39m: 8081
+[11:02:28.532] [32mINFO[39m (11712): [36mrequest completed[39m
+    [35mreq[39m: {
+      "id": 1,
+      "method": "GET",
+      "url": "/api/auth/me"
+    }
+    [35mres[39m: {
+      "statusCode": 200
+    }
+    [35mresponseTime[39m: 1872
+[11:02:30.717] [32mINFO[39m (11712): [36mrequest completed[39m
+    [35mreq[39m: {
+      "id": 2,
+      "method": "GET",
+      "url": "/api/notifications"
+    }
+    [35mres[39m: {
+      "statusCode": 200
+    }
+    [35mresponseTime[39m: 2004
+[11:02:30.770] [32mINFO[39m (11712): [36mrequest completed[39m
+    [35mreq[39m: {
+      "id": 5,
+      "method": "GET",
+      "url": "/api/dashboard/recent-activity"
+    }
+    [35mres[39m: {
+      "statusCode": 200
+    }
+    [35mresponseTime[39m: 2036
+[11:02:30.798] [32mINFO[39m (11712): [36mrequest completed[39m
+    [35mreq[39m: {
+      "id": 7,
+      "method": "GET",
+      "url": "/api/hostel/summary"
+    }
+    [35mres[39m: {
+      "statusCode": 200
+    }
+    [35mresponseTime[39m: 1752
+[11:02:30.820] [32mINFO[39m (11712): [36mrequest completed[39m
+    [35mreq[39m: {
+      "id": 4,
+      "method": "GET",
+      "url": "/api/dashboard/attendance-overview"
+    }
+    [35mres[39m: {
+      "statusCode": 200
+    }
+    [35mresponseTime[39m: 2089
+[11:02:31.000] [32mINFO[39m (11712): [36mrequest completed[39m
+    [35mreq[39m: {
+      "id": 6,
+      "method": "GET",
+      "url": "/api/dashboard/fee-collection"
+    }
+    [35mres[39m: {
+      "statusCode": 200
+    }
+    [35mresponseTime[39m: 2261
+[11:02:31.825] [32mINFO[39m (11712): [36mrequest completed[39m
+    [35mreq[39m: {
+      "id": 9,
+      "method": "GET",
+      "url": "/api/vendors"
+    }
+    [35mres[39m: {
+      "statusCode": 200
+    }
+    [35mresponseTime[39m: 421
+[11:02:31.869] [32mINFO[39m (11712): [36mrequest completed[39m
+    [35mreq[39m: {
+      "id": 12,
+      "method": "GET",
+      "url": "/api/inventory/low-stock"
+    }
+    [35mres[39m: {
+      "statusCode": 200
+    }
+    [35mresponseTime[39m: 443
+[11:02:31.873] [32mINFO[39m (11712): [36mrequest completed[39m
+    [35mreq[39m: {
+      "id": 11,
+      "method": "GET",
+      "url": "/api/inventory/reports/summary"
+    }
+    [35mres[39m: {
+      "statusCode": 200
+    }
+    [35mresponseTime[39m: 449
+[11:02:32.065] [32mINFO[39m (11712): [36mrequest completed[39m
+    [35mreq[39m: {
+      "id": 10,
+      "method": "GET",
+      "url": "/api/purchase-orders"
+    }
+    [35mres[39m: {
+      "statusCode": 200
+    }
+    [35mresponseTime[39m: 655
+[11:02:32.178] [32mINFO[39m (11712): [36mrequest completed[39m
+    [35mreq[39m: {
+      "id": 3,
+      "method": "GET",
+      "url": "/api/dashboard/summary"
+    }
+    [35mres[39m: {
+      "statusCode": 200
+    }
+    [35mresponseTime[39m: 3450
+[11:02:32.366] [32mINFO[39m (11712): [36mrequest completed[39m
+    [35mreq[39m: {
+      "id": 13,
+      "method": "POST",
+      "url": "/api/auth/logout"
+    }
+    [35mres[39m: {
+      "statusCode": 200
+    }
+    [35mresponseTime[39m: 218
+[11:02:32.477] [32mINFO[39m (11712): [36mrequest completed[39m
+    [35mreq[39m: {
+      "id": 8,
+      "method": "GET",
+      "url": "/api/materials"
+    }
+    [35mres[39m: {
+      "statusCode": 200
+    }
+    [35mresponseTime[39m: 1129
+[11:02:32.948] [32mINFO[39m (11712): [36mrequest completed[39m
+    [35mreq[39m: {
+      "id": 14,
+      "method": "GET",
+      "url": "/api/auth/me"
+    }
+    [35mres[39m: {
+      "statusCode": 401
+    }
+    [35mresponseTime[39m: 2
+[11:02:32.951] [32mINFO[39m (11712): [36mrequest completed[39m
+    [35mreq[39m: {
+      "id": 15,
+      "method": "GET",
+      "url": "/api/notifications"
+    }
+    [35mres[39m: {
+      "statusCode": 401
+    }
+    [35mresponseTime[39m: 1
+[11:02:34.477] [32mINFO[39m (11712): [36mrequest completed[39m
+    [35mreq[39m: {
+      "id": 16,
+      "method": "GET",
+      "url": "/api/auth/me"
+    }
+    [35mres[39m: {
+      "statusCode": 401
+    }
+    [35mresponseTime[39m: 1
