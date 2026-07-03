@@ -56,7 +56,7 @@ export async function attachUser(req, _res, next) {
         if (!u)
             return next();
         if (await isStaffAccountInactive(u)) {
-            const isProd = process.env.NODE_ENV === "production";
+            const isProd = process.env.NODE_ENV === "production" || process.env.RENDER === "true";
             _res.clearCookie("userId", {
                 httpOnly: true,
                 signed: true,

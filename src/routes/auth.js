@@ -109,7 +109,7 @@ router.post("/auth/login", async (req, res) => {
             const hashed = await hashPassword(password);
             await db.update(usersTable).set({ password: hashed }).where(eq(usersTable.id, user.id));
         }
-        const isProd = process.env.NODE_ENV === "production";
+        const isProd = process.env.NODE_ENV === "production" || process.env.RENDER === "true";
         res.cookie("userId", String(user.id), {
             httpOnly: true,
             signed: true,
@@ -151,7 +151,7 @@ router.post("/auth/login", async (req, res) => {
     }
 });
 router.post("/auth/logout", (_req, res) => {
-    const isProd = process.env.NODE_ENV === "production";
+    const isProd = process.env.NODE_ENV === "production" || process.env.RENDER === "true";
     res.clearCookie("userId", {
         httpOnly: true,
         signed: true,
