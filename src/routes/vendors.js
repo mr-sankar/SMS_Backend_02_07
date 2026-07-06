@@ -221,7 +221,6 @@ router.post("/vendors", requireRole("admin", "store_manager", "accountant"), asy
                         name: data.name,
                         email: data.email,
                         phone: data.phone ?? null,
-                        vendorId: v.id, // Link to vendor (like staffId for staff)
                     }).returning();
 
                     // 3. Update vendor with userId (EXACTLY like staff)

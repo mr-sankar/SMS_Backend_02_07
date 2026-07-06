@@ -148,3 +148,70 @@ export async function sendStaffCredentialsEmail({
     html
   );
 }
+
+export async function sendPasswordChangedEmail({
+  to,
+  name,
+  username,
+  newPassword,
+}) {
+  const loginUrl = process.env.FRONTEND_URL || "https://www.google.com";
+  const html = `
+  <!DOCTYPE html>
+  <html>
+  <head>
+    <meta charset="UTF-8" />
+  </head>
+  <body style="margin:0;padding:0;background:#f4f7fb;font-family:Arial,Helvetica,sans-serif;">
+    <table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f7fb;padding:30px 0;">
+      <tr>
+        <td align="center">
+          <table width="650" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 4px 12px rgba(0,0,0,0.08);">
+            <!-- Header -->
+            <tr>
+              <td style="background:#2563eb;padding:30px;text-align:center;">
+                <h1 style="color:#ffffff;margin:0;font-size:28px;">
+                  School Management System
+                </h1>
+              </td>
+            </tr>
+            <!-- Content -->
+            <tr>
+              <td style="padding:35px;">
+                <h2 style="margin-top:0;color:#111827;">
+                  Password Updated Successfully!
+                </h2>
+                <p style="font-size:15px;color:#4b5563;line-height:1.7;">
+                  Hello ${name},<br/><br/>
+                  The password for your account has been updated successfully.
+                  Below are your login details:
+                </p>
+                <!-- Details Card -->
+                <div style="background:#f8fafc;border:1px solid #e5e7eb;border-radius:10px;padding:20px;margin:25px 0;">
+                  <h3 style="margin-top:0;color:#1f2937;">Account Credentials</h3>
+                  <p style="margin:10px 0;"><strong>Username:</strong> ${username}</p>
+                  <p style="margin:10px 0;"><strong>New Password:</strong> ${newPassword}</p>
+                </div>
+                <!-- Login Button -->
+                <div style="text-align:center;margin:30px 0;">
+                  <a href="${loginUrl}" target="_blank" style="background:#2563eb;color:#ffffff;text-decoration:none;padding:14px 28px;border-radius:8px;display:inline-block;font-weight:bold;">
+                    Login to Portal
+                  </a>
+                </div>
+              </td>
+            </tr>
+            <!-- Footer -->
+            <tr>
+              <td style="background:#f9fafb;text-align:center;padding:20px;color:#6b7280;font-size:12px;border-top:1px solid #e5e7eb;">
+                © ${new Date().getFullYear()} School Management System. All Rights Reserved.
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
+  </html>
+  `;
+  return sendEmail(to, "Password Updated - School Management System", html);
+}

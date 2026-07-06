@@ -204,6 +204,8 @@ router.get("/transport/drivers", requireRole(...managerRoles), async (req, res) 
     try {
         const drivers = await db.select().from(staffTable).where(eq(staffTable.role, "driver"));
         const vehicles = await db.select().from(vehiclesTable);
+        const users = await db.select().from(usersTable);
+        const userMap = Object.fromEntries(users.map((u) => [u.id, u.username]));
         return res.json(drivers.map((d) => {
             const v = vehicles.find((vv) => vv.driverId === d.id);
             return {
@@ -211,6 +213,7 @@ router.get("/transport/drivers", requireRole(...managerRoles), async (req, res) 
                 name: d.name,
                 phone: d.phone,
                 email: d.email,
+                username: d.userId ? (userMap[d.userId] ?? null) : null,
                 licenseNo: d.qualification ?? null,
                 status: d.status,
                 userId: d.userId,
@@ -365,6 +368,55 @@ router.delete("/transport/drivers/:id", requireRole(...writeRoles), async (req, 
         return res.status(500).json({ error: "Internal server error" });
     }
 });
+
+router.patch("/transport/drivers/:id", requireRole(...writeRoles), async (req, res) => {
+    try {
+        const driverId = parseInt(req.params.id);
+        const [staff] = await db.select().from(staffTable).where(eq(staffTable.id, driverId)).limit(1);
+        if (!staff) return res.status(404).json({ error: "Driver not found" });
+
+        const { name, phone, email, licenseNo, username, password, assignedVehicleId } = req.body ?? {};
+
+        await db.transaction(async (tx) => {
+            // 1. Update user if user fields changed
+            const userUpd = {};
+            if (username) userUpd.username = String(username).toLowerCase();
+            if (name) userUpd.name = name;
+            if (email) userUpd.email = email;
+            if (phone) userUpd.phone = phone;
+            if (password) userUpd.password = await hashPassword(password);
+
+            if (Object.keys(userUpd).length > 0 && staff.userId) {
+                await tx.update(usersTable).set(userUpd).where(eq(usersTable.id, staff.userId));
+            }
+
+            // 2. Update staff
+            const staffUpd = {};
+            if (name) staffUpd.name = name;
+            if (phone) staffUpd.phone = phone;
+            if (email) staffUpd.email = email;
+            if (licenseNo !== undefined) staffUpd.qualification = licenseNo;
+
+            if (Object.keys(staffUpd).length > 0) {
+                await tx.update(staffTable).set(staffUpd).where(eq(staffTable.id, driverId));
+            }
+
+            // 3. Update vehicle assignment
+            if (assignedVehicleId !== undefined) {
+                await tx.update(vehiclesTable).set({ driverId: null }).where(eq(vehiclesTable.driverId, driverId));
+                if (assignedVehicleId && assignedVehicleId !== "none") {
+                    await tx.update(vehiclesTable).set({ driverId: driverId }).where(eq(vehiclesTable.id, parseInt(assignedVehicleId)));
+                }
+            }
+        });
+
+        return res.json({ ok: true, message: "Driver updated successfully" });
+    } catch (err) {
+        req.log.error(err);
+        return res.status(500).json({ error: "Internal server error" });
+    }
+});
+
 // ─── STUDENT TRANSPORT ASSIGNMENTS ────────────────────────────────────────
 router.get("/transport/assignments", requireRole(...managerRoles, "driver"), async (req, res) => {
     try {

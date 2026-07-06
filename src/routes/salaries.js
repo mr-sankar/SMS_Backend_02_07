@@ -7,7 +7,8 @@ import {
     salaryMonthsTable, 
     staffSalariesTable, 
     payslipsTable, 
-    salaryNotificationsTable 
+    salaryNotificationsTable,
+    schoolSettingsTable
 } from "@workspace/db";
 import { eq, and, or, desc, sql } from "drizzle-orm";
 import { requireRole, requireAuth } from "../middlewares/auth";
@@ -112,6 +113,12 @@ function calculateSalaryDetails(gross, leaveDays) {
         netSalary: String(netVal.toFixed(2))
     };
 }
+
+async function getSchoolName() {
+    const [settings] = await db.select().from(schoolSettingsTable).where(eq(schoolSettingsTable.id, 1));
+    return settings?.name?.trim() || "Nexus Academy";
+}
+
 // 1. POST /api/salary/generate: Generate salary sheet
 router.post("/salary/generate", requireRole("admin", "accountant"), async (req, res) => {
     try {
@@ -459,6 +466,8 @@ router.get("/payslip/download/:salaryId", requireAuth, async (req, res) => {
         // Fetch payslip info
         const [payslip] = await db.select().from(payslipsTable).where(eq(payslipsTable.salaryId, salaryId));
         const payslipNumber = payslip?.payslipNumber ?? `PAY-${salaryRecord.year}${String(salaryRecord.month).padStart(2, '0')}-${salaryId}`;
+        const schoolName = await getSchoolName();
+        const schoolNameUpper = schoolName.toUpperCase();
         // Initialize PDF Document
         const doc = new PDFDocument({ margin: 50, size: "A4" });
         res.setHeader("Content-Type", "application/pdf");
@@ -468,7 +477,7 @@ router.get("/payslip/download/:salaryId", requireAuth, async (req, res) => {
         const monthYearStr = `${monthNames[salaryRecord.month - 1]} ${salaryRecord.year}`;
         // Header Styling
         doc.rect(50, 45, 495, 75).fill("#1A1523");
-        doc.fillColor("#A78BFA").fontSize(18).font("Helvetica-Bold").text("NEXUS ACADEMY", 65, 55);
+        doc.fillColor("#A78BFA").fontSize(18).font("Helvetica-Bold").text(schoolNameUpper, 65, 55, { width: 330 });
         doc.fillColor("#94A3B8").fontSize(8).font("Helvetica").text("123, Sector IV, Madhapur, Hyderabad, Telangana", 65, 78);
         doc.text("Email: info@nexusacademy.edu | Contact: +91 40 1234 5678", 65, 92);
         doc.fillColor("#FFFFFF").fontSize(10).font("Helvetica-Bold").text("SALARY PAYSLIP", 420, 58, { align: "right", width: 110 });
@@ -566,7 +575,7 @@ router.get("/payslip/download/:salaryId", requireAuth, async (req, res) => {
         doc.text("Employee Signature", 395, 608, { width: 150, align: "center" });
         // School Seal mockup
         doc.rect(260, 570, 70, 70).dash(5, { space: 3 }).strokeColor("#A78BFA").stroke();
-        doc.fillColor("#A78BFA").fontSize(7).font("Helvetica-Bold").text("NEXUS ACADEMY", 260, 595, { width: 70, align: "center" });
+        doc.fillColor("#A78BFA").fontSize(7).font("Helvetica-Bold").text(schoolNameUpper, 260, 595, { width: 70, align: "center" });
         doc.fontSize(6).text("SEAL", 260, 610, { width: 70, align: "center" });
         doc.end();
     } catch (err) {

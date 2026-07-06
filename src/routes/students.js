@@ -106,7 +106,7 @@ async function allocateParentId() {
     return `${prefix}${String(next).padStart(3, "0")}`;
 }
 const router = Router();
-const READ_ROLES = ["admin", "teacher", "clerk", "librarian"];
+const READ_ROLES = ["admin", "teacher", "clerk", "librarian", "transport_manager"];
 const WRITE_ROLES = ["admin", "clerk"];
 function getDefaultAcademicYear(date = new Date()) {
     const year = date.getFullYear();
@@ -512,10 +512,28 @@ router.patch("/students/:id", requireRole(...WRITE_ROLES), async (req, res) => {
         const updateData = {};
         if (data.name !== undefined)
             updateData.name = data.name;
+        if (data.rollNumber !== undefined) {
+            const rollNumber = String(data.rollNumber).trim();
+            if (!rollNumber) {
+                return res.status(400).json({ error: "Roll number cannot be empty" });
+            }
+            if (rollNumber !== existing.rollNumber) {
+                const clash = await db.select().from(studentsTable).where(eq(studentsTable.rollNumber, rollNumber));
+                if (clash.length > 0)
+                    return res.status(409).json({ error: "Roll number already in use" });
+            }
+            updateData.rollNumber = rollNumber;
+        }
         if (data.classId !== undefined) {
             updateData.classId = data.classId;
             updateData.lastClassId = data.classId ?? existing.classId ?? null;
         }
+        if (data.gender !== undefined)
+            updateData.gender = data.gender;
+        if (data.dateOfBirth !== undefined)
+            updateData.dateOfBirth = data.dateOfBirth || null;
+        if (data.admissionDate !== undefined)
+            updateData.admissionDate = data.admissionDate;
         if (data.phone !== undefined)
             updateData.phone = data.phone;
         if (data.email !== undefined)
@@ -579,11 +597,11 @@ router.get("/attendance/student/:studentId/summary", requireRole(...READ_ROLES, 
         if (!student)
             return res.status(404).json({ error: "Not found" });
         const [studentClass] = await db.select().from(classesTable).where(eq(classesTable.id, student.classId));
-        const isPeriodwise = isPeriodEligibleClass(studentClass);
+        const periodRecords = await db.select().from(periodAttendanceTable).where(and(eq(periodAttendanceTable.studentId, studentId), eq(periodAttendanceTable.classId, student.classId)));
+        const dailyRecords = await db.select().from(attendanceTable).where(eq(attendanceTable.studentId, studentId));
+        const isPeriodwise = periodRecords.length > 0;
         const attendanceMode = isPeriodwise ? "periodwise" : "daily";
-        const records = isPeriodwise
-            ? await db.select().from(periodAttendanceTable).where(and(eq(periodAttendanceTable.studentId, studentId), eq(periodAttendanceTable.classId, student.classId)))
-            : await db.select().from(attendanceTable).where(eq(attendanceTable.studentId, studentId));
+        const records = isPeriodwise ? periodRecords : dailyRecords;
         const scopes = getDateScopes();
         const { daily, monthly, allTime } = buildAttendanceSnapshot(records, scopes.today, scopes.month);
         return res.json({

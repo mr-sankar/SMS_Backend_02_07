@@ -20,6 +20,7 @@ export const admissionsTable = pgTable("admissions", {
     interviewScore: text("interview_score"),
     meritListIncluded: text("merit_list_included"), // "yes", "no"
     meritRank: text("merit_rank"),
+    academicYear: varchar("academic_year", { length: 20 }),
     appliedAt: timestamp("applied_at").defaultNow().notNull(),
     reviewedAt: timestamp("reviewed_at"),
 });

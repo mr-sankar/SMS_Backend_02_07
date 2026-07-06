@@ -46,6 +46,15 @@ export async function attachUser(req, _res, next) {
                 raw = unsigned;
             }
         }
+
+        // Support Authorization header for cross-domain deployments where cookies are blocked
+        if (!raw && req.headers.authorization) {
+            const authHeader = req.headers.authorization;
+            const tokenMatch = authHeader.match(/(?:Bearer\s+)?(?:token-)?(\d+)/i);
+            if (tokenMatch) {
+                raw = tokenMatch[1];
+            }
+        }
         if (!raw)
             return next();
         const userId = parseInt(String(raw));

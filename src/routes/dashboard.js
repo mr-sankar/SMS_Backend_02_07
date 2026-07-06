@@ -93,14 +93,18 @@ router.get("/dashboard/summary", async (req, res) => {
         const [pendingFees] = await db.select({ total: sql `coalesce(sum(amount - coalesce(paid_amount, 0)), 0)` }).from(feeRecordsTable).where(eq(feeRecordsTable.status, "pending"));
         const today = new Date().toISOString().split("T")[0];
         const classesList = await db.select().from(classesTable);
-        const dailyClassIds = new Set(classesList.filter((cls) => !isPeriodEligibleClass(cls)).map((cls) => cls.id));
-        const periodClassIds = new Set(classesList.filter(isPeriodEligibleClass).map((cls) => cls.id));
         const dailyAttendance = await db.select().from(attendanceTable);
         const periodAttendance = await db.select().from(periodAttendanceTable);
-        const todaysAttendance = [
-            ...dailyAttendance.filter((row) => row.date === today && dailyClassIds.has(row.classId)),
-            ...periodAttendance.filter((row) => row.date === today && periodClassIds.has(row.classId)),
-        ];
+        const todaysAttendance = [];
+        for (const cls of classesList) {
+            const classPeriodToday = periodAttendance.filter((row) => row.date === today && row.classId === cls.id);
+            if (classPeriodToday.length > 0) {
+                todaysAttendance.push(...classPeriodToday);
+            } else {
+                const classDailyToday = dailyAttendance.filter((row) => row.date === today && row.classId === cls.id);
+                todaysAttendance.push(...classDailyToday);
+            }
+        }
         const todaySummary = summarizeAttendance(todaysAttendance);
         const announcements = await db.select().from(announcementsTable);
         const [pendingAdmissions] = await db.select({ count: sql `count(*)` }).from(admissionsTable).where(eq(admissionsTable.status, "pending"));
@@ -201,29 +205,34 @@ router.get("/dashboard/attendance-overview", async (req, res) => {
     try {
         const today = new Date().toISOString().split("T")[0];
         const classes = await db.select().from(classesTable);
-        const dailyClassIds = new Set(classes.filter((cls) => !isPeriodEligibleClass(cls)).map((cls) => cls.id));
-        const periodClassIds = new Set(classes.filter(isPeriodEligibleClass).map((cls) => cls.id));
         const dailyAttendance = await db.select().from(attendanceTable);
         const periodAttendance = await db.select().from(periodAttendanceTable);
-        const todaySummary = summarizeStudentDayAttendance([
-            ...dailyAttendance.filter((row) => row.date === today && dailyClassIds.has(row.classId)),
-            ...periodAttendance.filter((row) => row.date === today && periodClassIds.has(row.classId)),
-        ]);
+
+        const getAggregatedRows = (filterFn) => {
+            const result = [];
+            for (const cls of classes) {
+                const classPeriod = periodAttendance.filter((row) => row.classId === cls.id && filterFn(row));
+                if (classPeriod.length > 0) {
+                    result.push(...classPeriod);
+                } else {
+                    const classDaily = dailyAttendance.filter((row) => row.classId === cls.id && filterFn(row));
+                    result.push(...classDaily);
+                }
+            }
+            return result;
+        };
+
+        const todaySummary = summarizeStudentDayAttendance(getAggregatedRows((row) => row.date === today));
         const weekWindow = getDateWindow(7);
         const monthWindow = getDateWindow(30);
-        const weekSummary = summarizeStudentDayAttendance([
-            ...dailyAttendance.filter((row) => withinWindow(row.date, weekWindow) && dailyClassIds.has(row.classId)),
-            ...periodAttendance.filter((row) => withinWindow(row.date, weekWindow) && periodClassIds.has(row.classId)),
-        ]);
-        const monthSummary = summarizeStudentDayAttendance([
-            ...dailyAttendance.filter((row) => withinWindow(row.date, monthWindow) && dailyClassIds.has(row.classId)),
-            ...periodAttendance.filter((row) => withinWindow(row.date, monthWindow) && periodClassIds.has(row.classId)),
-        ]);
+        const weekSummary = summarizeStudentDayAttendance(getAggregatedRows((row) => withinWindow(row.date, weekWindow)));
+        const monthSummary = summarizeStudentDayAttendance(getAggregatedRows((row) => withinWindow(row.date, monthWindow)));
         const byClass = classes
             .map((cls) => {
-            const mode = isPeriodEligibleClass(cls) ? "periodwise" : "daily";
-            const source = mode === "periodwise" ? periodAttendance : dailyAttendance;
-            const recent = source.filter((row) => row.classId === cls.id && withinWindow(row.date, monthWindow));
+            const classPeriod = periodAttendance.filter((row) => row.classId === cls.id && withinWindow(row.date, monthWindow));
+            const hasPeriod = classPeriod.length > 0;
+            const mode = hasPeriod ? "periodwise" : "daily";
+            const recent = hasPeriod ? classPeriod : dailyAttendance.filter((row) => row.classId === cls.id && withinWindow(row.date, monthWindow));
             const summary = summarizeStudentDayAttendance(recent);
             return {
                 className: formatClassName(cls),
@@ -238,9 +247,10 @@ router.get("/dashboard/attendance-overview", async (req, res) => {
             .slice(0, 8);
         const todayByClass = classes
             .map((cls) => {
-            const mode = isPeriodEligibleClass(cls) ? "periodwise" : "daily";
-            const source = mode === "periodwise" ? periodAttendance : dailyAttendance;
-            const recent = source.filter((row) => row.classId === cls.id && row.date === today);
+            const classPeriod = periodAttendance.filter((row) => row.classId === cls.id && row.date === today);
+            const hasPeriod = classPeriod.length > 0;
+            const mode = hasPeriod ? "periodwise" : "daily";
+            const recent = hasPeriod ? classPeriod : dailyAttendance.filter((row) => row.classId === cls.id && row.date === today);
             const summary = summarizeStudentDayAttendance(recent);
             return {
                 className: formatClassName(cls),

@@ -425,6 +425,10 @@ router.get("/inventory/reports/purchases", requireRole(...storeRoles), async (_r
                 id: p.id,
                 poNumber: p.poNumber,
                 vendorName: vmap[p.vendorId] ?? `Vendor ${p.vendorId}`,
+                items: Array.isArray(p.items) ? p.items.map((item) => ({
+                    name: item?.name ?? "",
+                    quantity: Number(item?.quantity ?? item?.qty ?? 0),
+                })) : [],
                 status: p.status,
                 totalAmount: Number(p.totalAmount),
                 createdAt: p.createdAt.toISOString(),

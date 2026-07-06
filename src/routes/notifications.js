@@ -2,7 +2,7 @@ import { Router } from "express";
 import { db } from "@workspace/db";
 import { leaveRequestsTable, admissionsTable, complaintsTable, hostelApplicationsTable, feeRecordsTable, announcementsTable, staffTable, salaryNotificationsTable} from "@workspace/db";
 import { eq, and, desc } from "drizzle-orm";
-import { resolveStudentForUser, resolveChildrenForParent } from "../lib/scope";
+import { resolveStudentForUser, resolveChildrenForParent, resolveOwnClassIds } from "../lib/scope";
 const router = Router();
 function isActiveAnnouncement(announcement, now = new Date()) {
     const publishAt = announcement.publishAt ? new Date(announcement.publishAt) : null;
@@ -11,6 +11,58 @@ function isActiveAnnouncement(announcement, now = new Date()) {
         return false;
     if (expiresAt && expiresAt <= now)
         return false;
+    return true;
+}
+
+function announcementAudiencesFor(role) {
+    switch (role) {
+        case "admin":
+            return [];
+        case "teacher":
+            return ["all", "teachers", "staff"];
+        case "student":
+            return ["all", "students"];
+        case "parent":
+            return ["all", "parents"];
+        case "hostel_warden":
+            return ["all", "hostel"];
+        case "store_manager":
+            return ["all", "store"];
+        case "transport_manager":
+            return ["all", "transport"];
+        case "accountant":
+            return ["all", "accounts"];
+        case "clerk":
+            return ["all", "staff"];
+        case "librarian":
+            return ["all", "library"];
+        case "vendor":
+            return ["all", "vendors"];
+        case "driver":
+            return ["all", "transport"];
+        default:
+            return ["all"];
+    }
+}
+
+function compactAnnouncementText(text, maxLength = 120) {
+    const compact = String(text ?? "").replace(/\s+/g, " ").trim();
+    if (compact.length <= maxLength)
+        return compact;
+    return `${compact.slice(0, maxLength - 3)}...`;
+}
+
+async function canNotifyAnnouncement(announcement, me, now = new Date()) {
+    if (!isActiveAnnouncement(announcement, now))
+        return false;
+    const allowed = announcementAudiencesFor(me.role);
+    if (allowed.length > 0 && !allowed.includes(announcement.audience))
+        return false;
+    if ((me.role === "student" || me.role === "parent") && announcement.classId != null) {
+        const ownClassIds = new Set(await resolveOwnClassIds(me));
+        if (!ownClassIds.has(announcement.classId))
+            return false;
+    }
     return true;
 }
 
@@ -229,17 +281,25 @@ router.get("/notifications", async (req, res) => {
             .select()
             .from(announcementsTable)
             .orderBy(desc(announcementsTable.createdAt))
-            .limit(3);
-        const fresh = recentAnnouncements.filter(a => a.createdAt > cutoff && isActiveAnnouncement(a, now));
+            .limit(10);
+        const fresh = [];
+        for (const announcement of recentAnnouncements) {
+            if (announcement.createdAt > cutoff && await canNotifyAnnouncement(announcement, me, now)) {
+                fresh.push(announcement);
+            }
+        }
         if (fresh.length > 0) {
+            const latest = fresh[0];
+            const detail = compactAnnouncementText(latest.content);
             items.push({
-                id: "announcements-new",
+                id: `announcement-${latest.id}`,
                 type: "announcements",
-                title: `${fresh.length} New Announcement${fresh.length > 1 ? "s" : ""}`,
-                body: fresh[0].title,
+                title: latest.title,
+                body: detail || `${fresh.length} new announcement${fresh.length > 1 ? "s" : ""}`,
                 href: "/announcements",
                 severity: fresh.some(a => a.priority === "urgent") ? "urgent" : "info",
-                createdAt: fresh[0].createdAt.toISOString(),
+                announcementId: latest.id,
+                createdAt: latest.createdAt.toISOString(),
             });
         }
         // ── SALARY NOTIFICATIONS ────────────────────────────────

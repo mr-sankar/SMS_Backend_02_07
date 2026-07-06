@@ -63,6 +63,15 @@ async function bootstrapLocalDb(client) {
     // Ensure all optional admission columns are present
     await execSql(`
         -- 1. Create tables first
+        CREATE TABLE IF NOT EXISTS "school_settings" (
+            "id" integer PRIMARY KEY DEFAULT 1,
+            "name" text NOT NULL,
+            "logo_url" text,
+            "school_start_time" text DEFAULT '10:00' NOT NULL,
+            "school_end_time" text DEFAULT '17:30' NOT NULL,
+            "updated_at" timestamp DEFAULT now() NOT NULL
+        );
+
         CREATE TABLE IF NOT EXISTS "fee_payments" (
             "id" serial PRIMARY KEY NOT NULL,
             "fee_record_id" integer NOT NULL,
@@ -246,6 +255,9 @@ async function bootstrapLocalDb(client) {
         );
 
         -- 2. Alter tables next
+        ALTER TABLE "school_settings" ADD COLUMN IF NOT EXISTS "school_start_time" text DEFAULT '10:00' NOT NULL;
+        ALTER TABLE "school_settings" ADD COLUMN IF NOT EXISTS "school_end_time" text DEFAULT '17:30' NOT NULL;
+
         ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "parent_id" text;
         ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "address" text;
         CREATE UNIQUE INDEX IF NOT EXISTS "users_parent_id_unique" ON "users" ("parent_id");
@@ -256,6 +268,7 @@ async function bootstrapLocalDb(client) {
         ALTER TABLE "admissions" ADD COLUMN IF NOT EXISTS "interview_score" text;
         ALTER TABLE "admissions" ADD COLUMN IF NOT EXISTS "merit_list_included" text;
         ALTER TABLE "admissions" ADD COLUMN IF NOT EXISTS "merit_rank" text;
+        ALTER TABLE "admissions" ADD COLUMN IF NOT EXISTS "academic_year" varchar(20);
         
         ALTER TABLE "assignment_submissions" ADD COLUMN IF NOT EXISTS "attachment_url" text;
         ALTER TABLE "assignments" ADD COLUMN IF NOT EXISTS "attachment_url" text;
@@ -319,6 +332,7 @@ async function bootstrapLocalDb(client) {
         ALTER TABLE "hostel_visitors" ADD COLUMN IF NOT EXISTS "id_type" varchar(30);
         ALTER TABLE "hostel_visitors" ADD COLUMN IF NOT EXISTS "id_number" varchar(50);
         
+        ALTER TABLE "vendors" ADD COLUMN IF NOT EXISTS "vendor_id" varchar(50) UNIQUE;
         ALTER TABLE "vendors" ADD COLUMN IF NOT EXISTS "bank_account" text;
         ALTER TABLE "vendors" ADD COLUMN IF NOT EXISTS "documents" jsonb DEFAULT '[]'::jsonb;
         ALTER TABLE "vendors" ADD COLUMN IF NOT EXISTS "contracts" jsonb DEFAULT '[]'::jsonb;
@@ -351,8 +365,18 @@ async function createConnection() {
     if (process.env.DATABASE_URL) {
         console.log("Connecting to PostgreSQL database via DATABASE_URL...");
         const pool = new Pool({ connectionString: process.env.DATABASE_URL });
-        await bootstrapLocalDb(pool);
-        return { db: drizzleNodePostgres(pool, { schema }), pool };
+        try {
+            await bootstrapLocalDb(pool);
+            return { db: drizzleNodePostgres(pool, { schema }), pool };
+        } catch (err) {
+            console.error("Failed to connect to PostgreSQL via DATABASE_URL:", err?.message ?? err);
+            console.error("Falling back to local PGlite database.");
+            try {
+                await pool.end();
+            } catch (closeErr) {
+                console.warn("Unable to close PostgreSQL pool after failure:", closeErr?.message ?? closeErr);
+            }
+        }
     }
     console.log("Connecting to local in-memory PGlite database...");
     // Determine root directory to store pglite database

@@ -5,9 +5,11 @@ import { Readable } from "node:stream";
 import { db } from "@workspace/db";
 import {
     staffTable,
+    classesTable,
     usersTable,
     staffCheckinsTable,
     staffAttendanceTable,
+    schoolSettingsTable,
     studentsTable,
     vendorsTable,
     admissionsTable
@@ -17,6 +19,7 @@ import { requireRole, requireAuth } from "../middlewares/auth";
 import { hashPassword } from "../lib/password";
 import { ObjectStorageService } from "../lib/objectStorage";
 import { sendStaffCredentialsEmail } from "../lib/email";
+import { formatClassName } from "../lib/class-format";
 
 const router = Router();
 const READ_STAFF = [
@@ -43,6 +46,23 @@ const STAFF_CHECKIN_ROLES = [
     "store_manager",
     "librarian",
 ];
+
+async function getSchoolTimings() {
+    const [settings] = await db.select().from(schoolSettingsTable).where(eq(schoolSettingsTable.id, 1));
+    return {
+        schoolStartTime: settings?.schoolStartTime ?? "10:00",
+        schoolEndTime: settings?.schoolEndTime ?? "17:30",
+    };
+}
+
+function minutesFromTime(value) {
+    const [hour = "0", minute = "0"] = String(value ?? "").split(":");
+    return Number(hour) * 60 + Number(minute);
+}
+
+function minutesFromDate(date) {
+    return date.getHours() * 60 + date.getMinutes();
+}
 const ROLE_PREFIX = {
     teacher: "TEA",
     admin: "ADM",
@@ -98,6 +118,45 @@ function sendDataUrlDocument(res, doc) {
 
 function serializeStaff(s) {
     return { ...s, salary: s.salary ? Number(s.salary) : null, documents: publicDocuments(s.documents) };
+}
+
+function serializeClassTeacherAssignment(cls) {
+    if (!cls)
+        return null;
+    return {
+        id: cls.id,
+        grade: cls.grade,
+        section: cls.section,
+        name: formatClassName(cls),
+        label: formatClassName(cls),
+        academicYear: cls.academicYear,
+        room: cls.room,
+    };
+}
+
+async function classTeacherAssignmentsForStaffIds(staffIds) {
+    const ids = [...new Set(staffIds.filter((id) => id != null))];
+    if (ids.length === 0)
+        return new Map();
+    const classes = await db.select().from(classesTable);
+    const assignmentMap = new Map(ids.map((id) => [String(id), []]));
+    for (const cls of classes) {
+        const teacherId = cls.teacherId == null ? null : String(cls.teacherId);
+        if (!teacherId || !assignmentMap.has(teacherId))
+            continue;
+        assignmentMap.get(teacherId).push(serializeClassTeacherAssignment(cls));
+    }
+    return assignmentMap;
+}
+
+async function serializeStaffWithClassTeacher(s, assignmentMap) {
+    const ownMap = assignmentMap ?? await classTeacherAssignmentsForStaffIds([s.id]);
+    const assignments = ownMap.get(String(s.id)) ?? [];
+    return {
+        ...serializeStaff(s),
+        classTeacherAssignments: assignments,
+        classTeacherAssignment: assignments[0] ?? null,
+    };
 }
 
 function summarizeStaffAttendance(records) {
@@ -553,7 +612,8 @@ router.get("/staff", requireAuth, async (req, res) => {
         }
 
         const staff = await query;
-        return res.json(staff.map(serializeStaff));
+        const assignmentMap = await classTeacherAssignmentsForStaffIds(staff.map((s) => s.id));
+        return res.json(await Promise.all(staff.map((s) => serializeStaffWithClassTeacher(s, assignmentMap))));
     } catch (err) {
         req.log.error({ err }, "List staff error");
         return res.status(500).json({ error: "Internal server error" });
@@ -574,7 +634,7 @@ router.get("/staff/:id", requireAuth, async (req, res) => {
             return res.status(403).json({ error: "Forbidden" });
         }
 
-        return res.json(serializeStaff(s));
+        return res.json(await serializeStaffWithClassTeacher(s));
     } catch (err) {
         req.log.error({ err }, "Get staff error");
         return res.status(500).json({ error: "Internal server error" });
@@ -1085,6 +1145,9 @@ router.post("/attendance/checkin", requireRole(...STAFF_CHECKIN_ROLES), async (r
         const userId = req.user.id;
         const today = new Date().toISOString().split("T")[0];
         const now = new Date();
+        const timings = await getSchoolTimings();
+        const isLate = minutesFromDate(now) > minutesFromTime(timings.schoolStartTime);
+        const checkInReason = reason?.trim() || (isLate ? "Late check-in" : null);
 
         const [existing] = await db.select().from(staffCheckinsTable).where(
             and(
@@ -1103,14 +1166,14 @@ router.post("/attendance/checkin", requireRole(...STAFF_CHECKIN_ROLES), async (r
             const [updated] = await db.update(staffCheckinsTable)
                 .set({
                     checkInTime: now,
-                    checkInReason: reason ? reason.trim() : null,
+                    checkInReason,
                 })
                 .where(eq(staffCheckinsTable.id, existing.id))
                 .returning();
 
             await syncStaffAttendanceForCheckin(req.user, today, {
                 checkInTime: timeString(now),
-                remarks: reason ? reason.trim() : "Staff portal check-in",
+                remarks: checkInReason || "Staff portal check-in",
             });
 
             req.log.info({ userId, date: today }, "Staff check-in updated");
@@ -1121,12 +1184,12 @@ router.post("/attendance/checkin", requireRole(...STAFF_CHECKIN_ROLES), async (r
             userId,
             date: today,
             checkInTime: now,
-            checkInReason: reason ? reason.trim() : null,
+            checkInReason,
         }).returning();
 
         await syncStaffAttendanceForCheckin(req.user, today, {
                 checkInTime: timeString(now),
-                remarks: reason ? reason.trim() : "Staff portal check-in",
+                remarks: checkInReason || "Staff portal check-in",
             });
 
         req.log.info({ userId, date: today, checkInTime: now }, "Staff checked in successfully");
@@ -1146,6 +1209,9 @@ router.post("/attendance/checkout", requireRole(...STAFF_CHECKIN_ROLES), async (
         const userId = req.user.id;
         const today = new Date().toISOString().split("T")[0];
         const now = new Date();
+        const timings = await getSchoolTimings();
+        const isEarly = minutesFromDate(now) < minutesFromTime(timings.schoolEndTime);
+        const checkOutReason = reason?.trim() || (isEarly ? "Early checkout" : null);
 
         const [existing] = await db.select().from(staffCheckinsTable).where(
             and(
@@ -1164,14 +1230,14 @@ router.post("/attendance/checkout", requireRole(...STAFF_CHECKIN_ROLES), async (
         const [updated] = await db.update(staffCheckinsTable)
             .set({
                 checkOutTime: now,
-                checkOutReason: reason ? reason.trim() : null,
+                checkOutReason,
             })
             .where(eq(staffCheckinsTable.id, existing.id))
             .returning();
 
             await syncStaffAttendanceForCheckin(req.user, today, {
                 checkOutTime: timeString(now),
-                remarks: "Staff portal check-out",
+                remarks: checkOutReason || "Staff portal check-out",
             });
 
         req.log.info({ userId, date: today, checkOutTime: now }, "Staff checked out");

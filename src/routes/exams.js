@@ -4,6 +4,7 @@ import { examsTable, examResultsTable, classesTable, studentsTable, subjectsTabl
 import { desc, eq } from "drizzle-orm";
 import { requireRole } from "../middlewares/auth";
 import { resolveOwnClassIds, resolveOwnStudentIds } from "../lib/scope";
+import { formatClassName } from "../lib/class-format";
 const router = Router();
 const READ_EXAM = ["admin", "teacher", "student", "parent", "clerk"];
 const MANAGE_EXAM = ["admin"];
@@ -194,7 +195,7 @@ router.get("/exam-results", requireRole(...READ_EXAM), async (req, res) => {
         const exams = await db.select().from(examsTable);
         const classRows = await db.select().from(classesTable);
         const classMap = Object.fromEntries(classRows.map((c) => [c.id, {
-            name: `${c.grade}-${c.section}`,
+            name: formatClassName(c) ?? `${c.grade}-${c.section}`,
             academicYear: c.academicYear,
         }]));
         const studentMap = Object.fromEntries(students.map((s) => {
@@ -340,8 +341,13 @@ router.patch("/exam-results/:id", requireRole(...WRITE_EXAM_RESULT), async (req,
                 return res.status(403).json({ error: "Forbidden", details: "Teachers can only modify exam results for their assigned classes" });
         }
         const upd = {};
-        if (data.marksObtained !== undefined)
+        if (data.marksObtained !== undefined) {
             upd.marksObtained = String(data.marksObtained);
+            const [existingResult] = await db.select().from(examResultsTable).where(eq(examResultsTable.id, parseInt(String(req.params.id))));
+            if (!existingResult)
+                return res.status(404).json({ error: "Not found" });
+            upd.grade = calcGrade(Number(data.marksObtained), Number(existingResult.maxMarks));
+        }
         if (data.remarks !== undefined)
             upd.remarks = data.remarks;
         const [updated] = await db.update(examResultsTable).set(upd).where(eq(examResultsTable.id, parseInt(String(req.params.id)))).returning();
@@ -351,6 +357,7 @@ router.patch("/exam-results/:id", requireRole(...WRITE_EXAM_RESULT), async (req,
             ...updated,
             marksObtained: Number(updated.marksObtained),
             maxMarks: Number(updated.maxMarks),
+            grade: updated.grade || calcGrade(Number(updated.marksObtained), Number(updated.maxMarks)),
             gpa: updated.gpa ? Number(updated.gpa) : null,
             examName: `Exam ${updated.examId}`,
             studentName: `Student ${updated.studentId}`,
@@ -444,7 +451,7 @@ router.get("/exam-results/student/:studentId/gpa", requireRole("admin", "teacher
         const classes = await db.select().from(classesTable);
         const subjectMap = Object.fromEntries(subjects.map(s => [s.id, s]));
         const classMap = Object.fromEntries(classes.map((c) => [c.id, {
-            name: `${c.grade}-${c.section}`,
+            name: formatClassName(c) ?? `${c.grade}-${c.section}`,
             academicYear: c.academicYear,
         }]));
         const examMap = Object.fromEntries(exams.map((e) => [e.id, {
@@ -476,8 +483,8 @@ router.get("/exam-results/student/:studentId/gpa", requireRole("admin", "teacher
             studentId,
             studentName: student.name,
             rollNumber: student.rollNumber ?? null,
-            className: firstExam?.className ?? studentClass?.name ?? `Class ${student.classId}`,
-            academicYear: firstExam?.academicYear ?? studentClass?.academicYear ?? null,
+            className: studentClass?.name ?? firstExam?.className ?? (student.classId ? `Class ${student.classId}` : null) ?? "N/A",
+            academicYear: studentClass?.academicYear ?? firstExam?.academicYear ?? null,
             cgpa,
             totalCredits,
             subjects: subjectGpaList,

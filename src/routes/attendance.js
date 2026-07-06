@@ -39,7 +39,7 @@ router.get("/attendance", requireRole("admin", "teacher", "parent", "student", "
         const students = await db.select().from(studentsTable);
         const classes = await db.select().from(classesTable);
         const classMap = Object.fromEntries(classes.map((c) => [c.id, `${c.grade}-${c.section}`]));
-        const dailyEligibleClassIds = new Set(classes.filter((cls) => !isPeriodEligibleClass(cls)).map((cls) => cls.id));
+        const dailyEligibleClassIds = new Set(classes.map((cls) => cls.id));
         const studentMap = Object.fromEntries(students.map((s) => [s.id, { name: s.name, avatarUrl: s.avatarUrl }]));
         let all = await db.select().from(attendanceTable);
         all = all.filter((a) => dailyEligibleClassIds.has(a.classId));
@@ -104,12 +104,7 @@ router.post("/attendance", requireRole("admin", "teacher"), async (req, res) => 
         if (!targetClass) {
             return res.status(400).json({ error: "Selected class not found" });
         }
-        if (getAttendanceMode(targetClass) === "periodwise") {
-            return res.status(400).json({
-                error: "Periodwise attendance is required for Class 6 and above",
-                details: "Classes 6+ must be marked from the period attendance view.",
-            });
-        }
+        // Allow daily attendance marking for all classes, regardless of getAttendanceMode(targetClass)
         const existing = await db.select().from(attendanceTable).where(and(
             eq(attendanceTable.studentId, Number(data.studentId)),
             eq(attendanceTable.classId, Number(data.classId)),
@@ -190,8 +185,8 @@ router.get("/attendance/staff", requireRole("admin", "clerk", "teacher"), async 
                 remarks: null,
                 checkInTime: null,
                 checkOutTime: null,
-                checkInReason: canViewStaffReasons ? checkin.checkInReason ?? null : null,
-                checkOutReason: canViewStaffReasons ? checkin.checkOutReason ?? null : null,
+                checkInReason: null,
+                checkOutReason: null,
                 staffName: staff.name ?? `Staff ${staff.id}`,
                 staffRole: staff.role,
                 staffDepartment: staff.department ?? null,
@@ -222,8 +217,8 @@ router.get("/attendance/staff", requireRole("admin", "clerk", "teacher"), async 
                 remarks: existing.remarks ?? null,
                 checkInTime: checkin.checkInTime ?? existing.checkInTime ?? null,
                 checkOutTime: checkin.checkOutTime ?? existing.checkOutTime ?? null,
-                checkInReason: null,
-                checkOutReason: null,
+                checkInReason: canViewStaffReasons ? checkin.checkInReason ?? null : null,
+                checkOutReason: canViewStaffReasons ? checkin.checkOutReason ?? null : null,
                 createdAt: checkin.createdAt ?? existing.createdAt ?? null,
                 staffName: staff.name ?? staffMap[staff.id] ?? `Staff ${staff.id}`,
                 staffRole: staff.role,

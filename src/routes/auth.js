@@ -5,6 +5,7 @@ import { and, eq, or } from "drizzle-orm";
 import { requireRole, isStaffAccountInactive } from "../middlewares/auth";
 import { hashPassword, verifyPassword, isHashed } from "../lib/password";
 import { resolveStudentForUser } from "../lib/scope";
+import { sendPasswordChangedEmail } from "../lib/email";
 
 const router = Router();
 function parseDocuments(value) {
@@ -202,6 +203,8 @@ router.get("/school-settings", async (req, res) => {
         return res.json({
             name: settings?.name ?? "Nexus Academy",
             logoUrl: settings?.logoUrl ?? "",
+            schoolStartTime: settings?.schoolStartTime ?? "10:00",
+            schoolEndTime: settings?.schoolEndTime ?? "17:30",
             updatedAt: settings?.updatedAt?.toISOString?.() ?? null,
         });
     } catch (err) {
@@ -210,27 +213,51 @@ router.get("/school-settings", async (req, res) => {
     }
 });
 
+function normalizeSchoolTime(value) {
+    if (typeof value !== "string")
+        return null;
+    const match = value.trim().match(/^([01]\d|2[0-3]):([0-5]\d)$/);
+    return match ? `${match[1]}:${match[2]}` : null;
+}
+
 router.patch("/school-settings", requireRole("admin"), async (req, res) => {
     try {
         if (!req.user) {
             return res.status(401).json({ error: "Not authenticated" });
         }
-        const name = String(req.body?.name ?? "").trim();
-        const logoUrl = typeof req.body?.logoUrl === "string" ? req.body.logoUrl : null;
+        const [existing] = await db.select().from(schoolSettingsTable).where(eq(schoolSettingsTable.id, 1));
+        const name = String(req.body?.name ?? existing?.name ?? "Nexus Academy").trim();
+        const logoUrl = Object.prototype.hasOwnProperty.call(req.body ?? {}, "logoUrl")
+            ? (typeof req.body?.logoUrl === "string" ? req.body.logoUrl : null)
+            : (existing?.logoUrl ?? null);
+        const schoolStartTime = Object.prototype.hasOwnProperty.call(req.body ?? {}, "schoolStartTime")
+            ? normalizeSchoolTime(req.body?.schoolStartTime)
+            : (existing?.schoolStartTime ?? "10:00");
+        const schoolEndTime = Object.prototype.hasOwnProperty.call(req.body ?? {}, "schoolEndTime")
+            ? normalizeSchoolTime(req.body?.schoolEndTime)
+            : (existing?.schoolEndTime ?? "17:30");
         if (!name) {
             return res.status(400).json({ error: "School name is required" });
         }
+        if (!schoolStartTime || !schoolEndTime) {
+            return res.status(400).json({ error: "School start and end timings must use HH:MM format" });
+        }
+        if (schoolStartTime >= schoolEndTime) {
+            return res.status(400).json({ error: "School end time must be later than start time" });
+        }
         const [updated] = await db
             .insert(schoolSettingsTable)
-            .values({ id: 1, name, logoUrl })
+            .values({ id: 1, name, logoUrl, schoolStartTime, schoolEndTime })
             .onConflictDoUpdate({
                 target: schoolSettingsTable.id,
-                set: { name, logoUrl, updatedAt: new Date() },
+                set: { name, logoUrl, schoolStartTime, schoolEndTime, updatedAt: new Date() },
             })
             .returning();
         return res.json({
             name: updated.name,
             logoUrl: updated.logoUrl ?? "",
+            schoolStartTime: updated.schoolStartTime ?? "10:00",
+            schoolEndTime: updated.schoolEndTime ?? "17:30",
             updatedAt: updated.updatedAt.toISOString(),
         });
     } catch (err) {
@@ -478,10 +505,10 @@ router.post("/auth/change-password", async (req, res) => {
       return res.status(401).json({ error: "Not authenticated" });
     }
 
-    const { currentPassword, newPassword } = req.body;
+    const { newPassword } = req.body;
     
-    if (!currentPassword || !newPassword) {
-      return res.status(400).json({ error: "Current password and new password are required" });
+    if (!newPassword) {
+      return res.status(400).json({ error: "New password is required" });
     }
 
     if (newPassword.length < 6) {
@@ -496,18 +523,26 @@ router.post("/auth/change-password", async (req, res) => {
       return res.status(401).json({ error: "User not found" });
     }
 
-    // Verify current password
-    const isValid = await verifyPassword(currentPassword, user.password);
-    if (!isValid) {
-      return res.status(401).json({ error: "Current password is incorrect" });
-    }
-
     // Hash and update new password
     const hashed = await hashPassword(newPassword);
     await db
       .update(usersTable)
       .set({ password: hashed })
       .where(eq(usersTable.id, req.user.id));
+
+    // Send email to user
+    if (user.email) {
+      try {
+        await sendPasswordChangedEmail({
+          to: user.email,
+          name: user.name || user.username,
+          username: user.username,
+          newPassword: newPassword,
+        });
+      } catch (emailErr) {
+        req.log.error({ emailErr }, "Failed to send password changed email");
+      }
+    }
 
     return res.json({ success: true, message: "Password changed successfully" });
   } catch (err) {

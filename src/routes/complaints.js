@@ -12,7 +12,7 @@ const COMPLAINT_ROLES = ["clerk", "hostel_warden", "teacher", "student", "parent
 
 const RESOLVE_ROLES = ["admin", "clerk", "hostel_warden"];
 const DELETE_ROLES = READ_ROLES;
-const SELF_SCOPED_ROLES = ["student", "parent", "teacher", "accountant", "transport_manager", "librarian", "store_manager", "driver"];
+const SELF_SCOPED_ROLES = ["student", "parent", "teacher", "accountant", "transport_manager", "librarian", "store_manager", "driver", "vendor"];
 
 
 

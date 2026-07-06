@@ -135,6 +135,7 @@ router.post("/admissions", requireRole("admin", "clerk", "parent"), async (req, 
             parentPhone: data.parentPhone,
             address: data.address ?? null,
             documents: data.documents ?? null,
+            academicYear: data.academicYear ?? null,
             status: "pending",
         }).returning();
         return res.status(201).json({ ...admission, appliedAt: admission.appliedAt.toISOString(), reviewedAt: null });
@@ -428,6 +429,9 @@ router.post("/admissions/:id/enrol", requireRole("admin"), async (req, res) => {
         }
         const password = generatePassword();
         const passwordHash = await hashPassword(password);
+        const now = new Date();
+        const currentYear = now.getFullYear();
+        const defaultAcademicYear = `${currentYear} - ${currentYear + 1}`;
         const { student, userId } = await db.transaction(async (tx) => {
             const [s] = await tx.insert(studentsTable).values({
                 name: a.applicantName,
@@ -441,6 +445,7 @@ router.post("/admissions/:id/enrol", requireRole("admin"), async (req, res) => {
                 parentPhone: a.parentPhone ?? null,
                 address: a.address ?? null,
                 admissionDate: new Date().toISOString().split("T")[0],
+                academicYear: a.academicYear ?? defaultAcademicYear,
                 status: "active",
             }).returning();
             const [u] = await tx.insert(usersTable).values({

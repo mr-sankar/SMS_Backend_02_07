@@ -4118,7 +4118,7 @@ var require_pino = __commonJS({
     function pinoBundlerAbsolutePath(p) {
       try {
         const path = __require("path");
-        const outputDir = "E:\\SMS1\\SMS final last\\backend\\dist";
+        const outputDir = "E:\\SMS Final Pavan\\SMS final last-7-15\\SMS final last\\backend\\dist";
         return path.resolve(outputDir, p.replace(/^\.\//, ""));
       } catch (e) {
         const f = new Function("p", "return new URL(p, import.meta.url).pathname");
