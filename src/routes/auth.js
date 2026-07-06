@@ -532,16 +532,14 @@ router.post("/auth/change-password", async (req, res) => {
 
     // Send email to user
     if (user.email) {
-      try {
-        await sendPasswordChangedEmail({
-          to: user.email,
-          name: user.name || user.username,
-          username: user.username,
-          newPassword: newPassword,
-        });
-      } catch (emailErr) {
+      sendPasswordChangedEmail({
+        to: user.email,
+        name: user.name || user.username,
+        username: user.username,
+        newPassword: newPassword,
+      }).catch((emailErr) => {
         req.log.error({ emailErr }, "Failed to send password changed email");
-      }
+      });
     }
 
     return res.json({ success: true, message: "Password changed successfully" });

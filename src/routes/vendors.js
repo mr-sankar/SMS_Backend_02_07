@@ -233,22 +233,21 @@ router.post("/vendors", requireRole("admin", "store_manager", "accountant"), asy
                     return { vendor: linked ?? { ...v, userId: u.id }, userId: u.id };
                 });
 
-                // Send credentials email (like staff)
-                try {
-                    await sendStaffCredentialsEmail({
-                        to: data.email,
-                        name: data.name,
-                        staffId: vendorId,
-                        username,
-                        password,
-                    });
+                // Send credentials email in the background without blocking the response
+                sendStaffCredentialsEmail({
+                    to: data.email,
+                    name: data.name,
+                    staffId: vendorId,
+                    username,
+                    password,
+                }).then(() => {
                     req.log.info(`Vendor credentials email sent to ${data.email}`);
-                } catch (emailErr) {
+                }).catch((emailErr) => {
                     req.log.error(
                         { emailErr },
                         `Failed to send vendor credentials email to ${data.email}`
                     );
-                }
+                });
 
                 // Return response with credentials (EXACTLY like staff)
                 return res.status(201).json({

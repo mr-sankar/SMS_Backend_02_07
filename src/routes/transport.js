@@ -283,12 +283,9 @@ router.post("/transport/drivers", requireRole(...writeRoles), async (req, res) =
 </ul>
 <p>Please sign in at <a href="${process.env.APP_URL ?? "http://localhost:4173"}">${process.env.APP_URL ?? "http://localhost:4173"}</a> and change your password after logging in.</p>
 <p>Thank you,<br/>Transport Team</p>`;
-            try {
-                await sendEmail(userEmail, "Your driver account credentials", html);
-            }
-            catch (emailErr) {
+            sendEmail(userEmail, "Your driver account credentials", html).catch((emailErr) => {
                 req.log.error({ err: emailErr, email: userEmail }, "Failed to send driver credentials email");
-            }
+            });
         }
         return res.status(201).json({
             id: staff.id,

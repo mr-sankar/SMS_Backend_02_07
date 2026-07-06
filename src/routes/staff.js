@@ -523,19 +523,18 @@ router.post("/staff", requireRole(...WRITE_STAFF), async (req, res) => {
 
                 console.log("[Staff Create] Successfully created staff with ID:", staff.staffId);
 
-                // ─── Send credentials email ─────────────────────────────
-                try {
-                    await sendStaffCredentialsEmail({
-                        to: data.email,
-                        name: data.name,
-                        staffId: staff.staffId,
-                        username,
-                        password,
-                    });
+                // Send credentials email in the background without blocking the response
+                sendStaffCredentialsEmail({
+                    to: data.email,
+                    name: data.name,
+                    staffId: staff.staffId,
+                    username,
+                    password,
+                }).then(() => {
                     console.log(`[Staff Create] Credentials email sent to ${data.email}`);
-                } catch (emailErr) {
+                }).catch((emailErr) => {
                     console.error(`[Staff Create] Failed to send credentials email to ${data.email}:`, emailErr);
-                }
+                });
 
                 return res.status(201).json({
                     ...serializeStaff(staff),
@@ -863,18 +862,17 @@ router.post("/staff/:id/reset-password", requireRole("admin"), async (req, res) 
             .set({ password: passwordHash })
             .where(eq(usersTable.id, staff.userId));
 
-        try {
-            await sendStaffCredentialsEmail({
-                to: staff.email,
-                name: staff.name,
-                staffId: staff.staffId,
-                username: staff.email,
-                password: newPassword,
-                isReset: true,
-            });
-        } catch (emailErr) {
+        // Send reset email in the background without blocking the response
+        sendStaffCredentialsEmail({
+            to: staff.email,
+            name: staff.name,
+            staffId: staff.staffId,
+            username: staff.email,
+            password: newPassword,
+            isReset: true,
+        }).catch((emailErr) => {
             req.log.error({ emailErr }, "Failed to send reset password email");
-        }
+        });
 
         return res.json({
             success: true,
