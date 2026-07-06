@@ -9,6 +9,37 @@ const transporter = nodemailer.createTransport({
 });
 
 export async function sendEmail(to, subject, html) {
+  // If Resend API Key is provided, use Resend HTTP API (works on Render free tier!)
+  if (process.env.RESEND_API_KEY) {
+    try {
+      console.log(`[Email] Attempting to send email via Resend API to ${to}...`);
+      const response = await fetch("https://api.resend.com/emails", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
+        },
+        body: JSON.stringify({
+          from: process.env.EMAIL_FROM || "School Management System <onboarding@resend.dev>",
+          to: [to],
+          subject,
+          html,
+        }),
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.message || "Failed to send email via Resend API");
+      }
+      console.log(`[Email] Email sent successfully via Resend. ID: ${data.id}`);
+      return data;
+    } catch (err) {
+      console.error("[Email] Resend API failed, falling back to SMTP:", err);
+    }
+  }
+
+  // Fallback to Gmail SMTP (for local development or if Resend is not configured)
+  console.log(`[Email] Sending email via Gmail SMTP to ${to}...`);
   return transporter.sendMail({
     from: process.env.EMAIL_FROM || process.env.EMAIL_USER,
     to,
